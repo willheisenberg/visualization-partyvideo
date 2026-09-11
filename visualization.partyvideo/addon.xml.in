@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addon id="visualization.partyvideo" version="0.1.0" name="Party Video" provider-name="tesla">
+  <requires>@ADDON_DEPENDS@
+    <import addon="xbmc.python" version="3.0.1"/>
+  </requires>
+  <extension point="xbmc.player.musicviz" library_@PLATFORM@="@LIBRARY_FILENAME@"/>
+  <extension point="xbmc.python.script" library="default.py">
+    <provides>executable</provides>
+  </extension>
+  <extension point="xbmc.service" library="service.py"/>
+  <extension point="xbmc.addon.metadata">
+    <platform>@PLATFORM@</platform>
+    <license>GPL-2.0-or-later</license>
+    <summary lang="de_DE">Stummes Video in Endlosschleife als Musikvisualisierung</summary>
+    <summary lang="en_GB">Muted looping video as music visualization</summary>
+    <description lang="de_DE">Stufe 0: Diagnoseversion. Zeichnet eine Farbfläche und prüft die Umgebung.</description>
+    <description lang="en_GB">Stage 0: diagnostic build. Draws a solid colour and probes the environment.</description>
+  </extension>
+</addon>
