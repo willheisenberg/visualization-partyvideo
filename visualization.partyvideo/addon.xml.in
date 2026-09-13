@@ -15,5 +15,9 @@
     <summary lang="en_GB">Muted looping video as music visualization</summary>
     <description lang="de_DE">Spielt lokale Dateien und YouTube-Videos stumm in Endlosschleife zur Musik.</description>
     <description lang="en_GB">Loops local files and YouTube videos silently while music plays.</description>
+    <assets>
+      <icon>resources/icon.png</icon>
+      <fanart>resources/fanart.jpg</fanart>
+    </assets>
   </extension>
 </addon>

@@ -1,40 +1,104 @@
-# visualization.partyvideo
+<img src="visualization.partyvideo/resources/icon.png" alt="" width="96" align="left">
 
-Kodi-Addon für LibreELEC 12 / Kodi 21 auf dem Raspberry Pi 5: zeigt lokale Videos
-oder heruntergeladene YouTube-Videos stumm in Endlosschleife während der Musik.
+# Party Video
+
+**Ein Video statt Balken: Kodi-Addon, das zu deiner Musik ein stummes Video in
+Endlosschleife zeigt — einen YouTube-Clip oder eine Datei von der Platte.**
+
+<br clear="left">
+
+Kodi bringt für Musik nur abstrakte Visualisierungen mit. Party Video setzt
+stattdessen ein Video hinter den Klang: Lavalampe, Loop, Musikvideo, was du
+willst. Der Ton kommt weiterhin von deiner Musik, das Video bleibt stumm.
+
+---
+
+## Voraussetzungen
+
+| | |
+|---|---|
+| Gerät | Raspberry Pi 5 (aarch64) |
+| System | LibreELEC 12 mit Kodi 21 „Omega“ |
+| Sonstiges | nichts — kein Docker, kein Compiler, kein zusätzliches ffmpeg |
+
+Das fertige Paket enthält eine für ARM64 übersetzte Bibliothek. Auf anderen
+Plattformen läuft es nicht, ohne neu gebaut zu werden.
+
+## Installation
+
+1. Das aktuelle `visualization.partyvideo-*.zip` aus den
+   [Releases](https://github.com/willheisenberg/visualization.partyvideo/releases)
+   herunterladen und auf den Pi kopieren, etwa nach `/storage/downloads`.
+2. In Kodi einmalig **Einstellungen → System → Add-ons → Unbekannte Quellen**
+   erlauben.
+3. **Add-ons → Aus ZIP-Datei installieren** und das Zip auswählen.
+4. **Einstellungen → Player → Musik → Visualisierung** auf *Party Video* stellen.
+
+Fertig. Beim nächsten Musiktitel öffnet sich die Visualisierung von selbst.
 
 ## Bedienung
 
-**Party Video öffnen** zeigt das Quellenmenü. Der erste Punkt schaltet das Visual
-ein oder aus; darunter folgen YouTube-URL, Videodatei, Status und Werkzeug-Update.
-Die Musikwiedergabe läuft unverändert weiter.
+Ein Klick auf **Party Video** unter *Add-ons → Programm-Add-ons* öffnet das
+Quellenmenü:
 
-**Addon-Informationen → Konfigurieren → Videoquelle wählen / Menü öffnen** führt zu:
-YouTube-URL eingeben, Videodatei wählen, Visual aus, Status und Werkzeug-Update.
-In den Einstellungen lässt sich die maximale YouTube-Auflösung auf 720 oder 1080 setzen.
+| Eintrag | Wirkung |
+|---|---|
+| **Visual ein- / ausschalten** | schaltet das Video an oder aus; die Musik läuft weiter |
+| **YouTube-URL eingeben** | Link eintippen, das Video wird geladen und läuft danach |
+| **Videodatei wählen** | eine Datei vom Gerät auswählen |
+| **Status** | zeigt, was gerade läuft |
+| **Werkzeuge aktualisieren** | erneuert die Download-Hilfsprogramme |
 
-Der erste YouTube-Download installiert nach Bestätigung yt-dlp und Deno mit
-Prüfsummenprüfung. Das Video wird vollständig geladen und dann angezeigt.
-Während eines neuen Downloads läuft das bisherige Video weiter. Ausschalten oder
-Ersetzen löscht den alten YouTube-Download; der Link bleibt für das nächste
-Einschalten gespeichert. Lokale Videodateien werden nicht gelöscht.
+Unter **Konfigurieren** lässt sich die maximale YouTube-Auflösung auf 720p statt
+1080p begrenzen — sinnvoll, wenn das Bild ruckelt.
 
-Beim Titelwechsel öffnet sich die Visualisierung automatisch. Nach „Zurück“ kehrt
-sie aus Hauptmenü/Musikansicht nach drei Sekunden Bedienpause zurück; Einstellungen
-und fremde Dialoge bleiben bedienbar. Ausschalten beendet auch diese Rückkehr.
-Nach einem Kodi-Neustart ist das Visual aus; die letzte Quelle bleibt auswählbar.
+### Was du wissen solltest
 
-[Bedienung und Bot-API](docs/bot-api.md) ·
-[Design](docs/superpowers/specs/2026-09-11-partyvideo-design.md) ·
-[Implementierungsplan](docs/superpowers/plans/2026-09-12-plan-3-service-youtube.md)
+- **Der erste YouTube-Download** installiert nach Rückfrage zwei Hilfsprogramme
+  (yt-dlp und Deno, zusammen rund 100 MB), beide über Prüfsummen abgesichert.
+  Das passiert nur einmal.
+- **Videos werden vollständig geladen**, nicht gestreamt. Ein langes Video kann
+  daher mehrere Gigabyte belegen. Während ein neues lädt, läuft das bisherige
+  weiter.
+- **Ausschalten gibt den Platz wieder frei:** Der YouTube-Download wird gelöscht,
+  der Link aber gemerkt und beim nächsten Einschalten neu geladen. Eigene
+  Videodateien werden nie gelöscht.
+- **Beim Titelwechsel** erscheint die Visualisierung automatisch. Drückst du
+  „Zurück“, kehrt sie nach drei Sekunden ohne Bedienung von selbst zurück;
+  Einstellungen und andere Dialoge bleiben ungestört bedienbar.
+- **Startest du einen Film**, hält sich das Addon vollständig heraus: Es
+  dekodiert nicht und kostet keine Leistung. Nach dem Film geht es an derselben
+  Stelle weiter.
+- **Nach einem Kodi-Neustart** ist das Visual aus; die letzte Quelle bleibt
+  gespeichert.
 
-## Entwicklung
+## Fernsteuerung
+
+Alles lässt sich auch über Kodis JSON-RPC bedienen, etwa aus einem Chatbot oder
+einem Skript. Befehle und Statusereignisse stehen in der
+[Bot-API](docs/bot-api.md).
+
+## Technisches
+
+Das Video wird mit dem FFmpeg des Systems dekodiert und über OpenGL ES
+gezeichnet. Der Decoder läuft in einem eigenen Thread und pausiert, sobald keine
+Visualisierung sichtbar ist. Heruntergeladen wird nur die Videospur ohne Ton —
+deshalb braucht das Gerät kein eigenes ffmpeg.
+
+## Mitentwickeln
 
 ```sh
 ./build.sh    # Addon-Zip im Docker-Container bauen → dist/
 ./test.sh     # Python-, Kern- und Pakettests plus vollständiger Addon-Build
 ```
 
-Voraussetzungen: Docker, Python ≥ 3.11 und `.venv` mit ruff.
-Zielgerät: RPi5/aarch64, LibreELEC 12.2.1, Kodi 21.3, System-FFmpeg 6.0.
-Auf dem Pi werden keine Compiler, kein Docker und kein zusätzliches ffmpeg benötigt.
+Dafür werden Docker und Python ≥ 3.11 mit einem `.venv` samt `ruff` gebraucht.
+Gebaut wird für RPi5/aarch64 gegen Kodi 21.3 und System-FFmpeg 6.0.
+
+[Design](docs/superpowers/specs/2026-09-11-partyvideo-design.md) ·
+[Pläne](docs/superpowers/plans/) ·
+[Testprotokolle](docs/superpowers/results/)
+
+## Lizenz
+
+GPL-2.0-or-later
