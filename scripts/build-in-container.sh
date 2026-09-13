@@ -30,18 +30,15 @@ cmake -S /opt/kodi/cmake/addons -B "$out/cmake" \
 cmake --build "$out/cmake" -j"$(nproc)"
 cmake --build "$out/cmake" --target package-addons
 
-so="$(find "$out/install/$id" -maxdepth 1 -type f -name "$id.so*" | head -1)"
-if [[ -z "$so" ]]; then
-  echo "Keine Bibliothek unter $out/install/$id gefunden" >&2
-  exit 1
-fi
-"$src/scripts/check_elf.sh" "$so"
-
-zip="$(find "$out/zips" -type f -name "$id-*.zip" | head -1)"
+zip="$(find "$out/zips" -type f -name "$id-*.zip" -print -quit)"
 if [[ -z "$zip" ]]; then
   echo "Kein Zip unter $out/zips gefunden" >&2
   exit 1
 fi
+
+# Geprüft wird die Bibliothek, die tatsächlich ausgeliefert wird (gestrippt, im Zip).
+"$src/scripts/check_zip.sh" "$zip"
+
 rm -f "$src/dist/$id-"*.zip
 cp "$zip" "$src/dist/"
 unzip -l "$src/dist/$(basename "$zip")"
