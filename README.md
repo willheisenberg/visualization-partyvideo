@@ -1,4 +1,6 @@
-<h1><img src="visualization.partyvideo/resources/icon.png" alt="" width="80" height="80" align="middle"> Party Video</h1>
+![Party Video – Fanart](visualization.partyvideo/resources/fanart.jpg)
+
+# Party Video
 
 **Ein Video statt Balken: Kodi-Addon, das zu deiner Musik ein stummes Video in
 Endlosschleife zeigt — einen YouTube-Clip oder eine Datei von der Platte.**
@@ -23,7 +25,7 @@ Plattformen läuft es nicht, ohne neu gebaut zu werden.
 ## Installation
 
 1. Das aktuelle `visualization.partyvideo-*.zip` aus den
-   [Releases](https://github.com/willheisenberg/visualization.partyvideo/releases)
+   [Releases](https://github.com/willheisenberg/visualization-partyvideo/releases)
    herunterladen und auf den Pi kopieren, etwa nach `/storage/downloads`.
 2. In Kodi einmalig **Einstellungen → System → Add-ons → Unbekannte Quellen**
    erlauben.
