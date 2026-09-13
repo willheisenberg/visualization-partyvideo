@@ -17,6 +17,12 @@ def format_chain(height):
     )
 
 
+# Ein zweiter Anlauf fängt die kurzlebigen 403er ab, ohne bei echten Ausfällen
+# lange zu blockieren.
+ATTEMPTS = 2
+RETRY_PAUSE_SECONDS = 3.0
+
+
 class DownloadError(Exception):
     pass
 
@@ -81,18 +87,30 @@ def download(url, directory, tools, height, cancel, progress, log, factory=None)
         "match_filter": match_filter,
         "cachedir": False,
     }
-    try:
-        with factory(options) as downloader:
-            info = downloader.extract_info(url, download=True)
+    # YouTube weist die signierte Medien-URL gelegentlich mit 403 ab. yt-dlps eigene
+    # "retries" holen dieselbe Adresse erneut und helfen dann nicht; nur eine frische
+    # Auflösung erzeugt eine neue URL. Deshalb ein zweiter Anlauf von vorn.
+    for attempt in range(ATTEMPTS):
+        try:
+            with factory(options) as downloader:
+                info = downloader.extract_info(url, download=True)
+                check_cancel(cancel)
+                if not info:
+                    raise DownloadError("download_failed")
+                path = Path(downloader.prepare_filename(info)).resolve()
+                if not path.is_relative_to(directory.resolve()) or not path.is_file():
+                    raise DownloadError("download_failed")
+                return str(path), str(info.get("title") or info.get("id") or "YouTube")
+        except Exception as exc:
+            if cancel.is_set() or isinstance(exc, Cancelled):
+                raise Cancelled from exc
+            if "Requested format is not available" in str(exc):
+                # Das Format fehlt dauerhaft; ein zweiter Anlauf ändert daran nichts.
+                raise DownloadError("no_suitable_format") from exc
+            if attempt + 1 >= ATTEMPTS:
+                raise DownloadError("download_failed") from exc
+            log(f"Download fehlgeschlagen ({exc}); neuer Versuch mit frischer Auflösung.")
             check_cancel(cancel)
-            if not info:
-                raise DownloadError("download_failed")
-            path = Path(downloader.prepare_filename(info)).resolve()
-            if not path.is_relative_to(directory.resolve()) or not path.is_file():
-                raise DownloadError("download_failed")
-            return str(path), str(info.get("title") or info.get("id") or "YouTube")
-    except Exception as exc:
-        if cancel.is_set() or isinstance(exc, Cancelled):
-            raise Cancelled from exc
-        code = "no_suitable_format" if "Requested format is not available" in str(exc) else "download_failed"
-        raise DownloadError(code) from exc
+            if cancel.wait(RETRY_PAUSE_SECONDS):
+                raise Cancelled from exc
+    raise DownloadError("download_failed")

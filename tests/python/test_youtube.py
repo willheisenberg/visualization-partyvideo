@@ -86,3 +86,100 @@ class YoutubeTests(unittest.TestCase):
             self.assertTrue(captured["noplaylist"])
             self.assertEqual(captured["fixup"], "never")
             self.assertEqual(captured["js_runtimes"], {"deno": {"path": "/tools/deno"}})
+
+
+class RetryTests(unittest.TestCase):
+    """Ein 403 trifft die signierte Medien-URL; nur eine frische Auflösung hilft."""
+
+    def setUp(self):
+        # Die echte Pause würde die Suite nur ausbremsen.
+        from partyvideo import youtube
+
+        self._pause = youtube.RETRY_PAUSE_SECONDS
+        youtube.RETRY_PAUSE_SECONDS = 0.0
+
+    def tearDown(self):
+        from partyvideo import youtube
+
+        youtube.RETRY_PAUSE_SECONDS = self._pause
+
+    def run_download(self, behaviours, directory, target, cancel=None):
+        attempts = []
+
+        class Fake:
+            def __init__(self, options):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def extract_info(self, url, download):
+                attempts.append(url)
+                outcome = behaviours[len(attempts) - 1]
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return outcome
+
+            def prepare_filename(self, info):
+                return str(target)
+
+        result = download(
+            "https://youtu.be/zbo6jUGrwdk",
+            directory,
+            "/tools",
+            1080,
+            cancel or threading.Event(),
+            lambda value: None,
+            lambda value: None,
+            factory=Fake,
+        )
+        return result, attempts
+
+    def test_second_attempt_succeeds_after_a_403(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "zbo6jUGrwdk.mp4"
+            target.touch()
+            behaviours = [
+                Exception("unable to download video data: HTTP Error 403: Forbidden"),
+                {"id": "zbo6jUGrwdk", "title": "Test"},
+            ]
+            result, attempts = self.run_download(behaviours, directory, target)
+            self.assertEqual(result, (str(target), "Test"))
+            self.assertEqual(len(attempts), 2, "keine zweite Aufloesung versucht")
+
+    def test_gives_up_after_the_retry(self):
+        from partyvideo.youtube import DownloadError
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "zbo6jUGrwdk.mp4"
+            target.touch()
+            behaviours = [Exception("HTTP Error 403: Forbidden")] * 3
+            with self.assertRaises(DownloadError) as caught:
+                self.run_download(behaviours, directory, target)
+            self.assertEqual(str(caught.exception), "download_failed")
+
+    def test_missing_format_is_not_retried(self):
+        from partyvideo.youtube import DownloadError
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "zbo6jUGrwdk.mp4"
+            target.touch()
+            behaviours = [Exception("Requested format is not available")] * 3
+            with self.assertRaises(DownloadError) as caught:
+                self.run_download(behaviours, directory, target)
+            self.assertEqual(str(caught.exception), "no_suitable_format")
+
+    def test_cancelling_is_not_retried(self):
+        from partyvideo.tools import Cancelled
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "zbo6jUGrwdk.mp4"
+            target.touch()
+            cancel = threading.Event()
+            cancel.set()
+            behaviours = [Exception("stopped")] * 3
+            with self.assertRaises(Cancelled):
+                self.run_download(behaviours, directory, target, cancel=cancel)

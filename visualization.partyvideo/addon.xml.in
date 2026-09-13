@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<addon id="visualization.partyvideo" version="0.3.0" name="Party Video" provider-name="tesla">
+<addon id="visualization.partyvideo" version="0.3.1" name="Party Video" provider-name="tesla">
   <requires>@ADDON_DEPENDS@
     <import addon="xbmc.python" version="3.0.1"/>
   </requires>
