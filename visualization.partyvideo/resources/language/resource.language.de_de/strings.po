@@ -1,0 +1,107 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgctxt "#32000"
+msgid "Party Video"
+msgstr "Party Video"
+
+msgctxt "#32001"
+msgid "Enter YouTube URL"
+msgstr "YouTube-URL eingeben"
+
+msgctxt "#32002"
+msgid "Choose video file"
+msgstr "Videodatei wählen"
+
+msgctxt "#32003"
+msgid "Turn visual off"
+msgstr "Visual ausschalten"
+
+msgctxt "#32004"
+msgid "Status"
+msgstr "Status"
+
+msgctxt "#32005"
+msgid "Update yt-dlp and Deno"
+msgstr "yt-dlp und Deno aktualisieren"
+
+msgctxt "#32006"
+msgid "Choose video source / open menu"
+msgstr "Videoquelle wählen / Menü öffnen"
+
+msgctxt "#32007"
+msgid "Maximum YouTube resolution"
+msgstr "Maximale YouTube-Auflösung"
+
+msgctxt "#32009"
+msgid "YouTube requires downloading yt-dlp and Deno (about 100 MB). Install now?"
+msgstr "Für YouTube müssen yt-dlp und Deno heruntergeladen werden (ca. 100 MB). Jetzt installieren?"
+
+msgctxt "#32010"
+msgid "The Party Video service is not ready yet. Please wait."
+msgstr "Der Party-Video-Service ist noch nicht bereit. Bitte kurz warten."
+
+msgctxt "#32011"
+msgid "On"
+msgstr "An"
+
+msgctxt "#32012"
+msgid "Off"
+msgstr "Aus"
+
+msgctxt "#32100"
+msgid "Invalid YouTube URL."
+msgstr "Ungültiger YouTube-Link."
+
+msgctxt "#32101"
+msgid "Please choose a local file. Network sources are not supported."
+msgstr "Bitte eine lokale Datei wählen. Netzwerkquellen werden nicht unterstützt."
+
+msgctxt "#32102"
+msgid "Video file not found."
+msgstr "Videodatei nicht gefunden."
+
+msgctxt "#32103"
+msgid "Could not install or verify tools."
+msgstr "Werkzeuge konnten nicht installiert oder geprüft werden."
+
+msgctxt "#32104"
+msgid "YouTube download failed. See Kodi log."
+msgstr "YouTube-Download fehlgeschlagen. Details stehen im Kodi-Log."
+
+msgctxt "#32105"
+msgid "No suitable H.264 format available."
+msgstr "Kein passendes H.264-Video in der gewählten Auflösung verfügbar."
+
+msgctxt "#32106"
+msgid "Could not open video."
+msgstr "Video konnte nicht geöffnet werden."
+
+msgctxt "#32107"
+msgid "File contains no video stream."
+msgstr "Datei enthält keine Videospur."
+
+msgctxt "#32108"
+msgid "Video codec is unsupported."
+msgstr "Videoformat wird nicht unterstützt."
+
+msgctxt "#32109"
+msgid "Video could not be decoded."
+msgstr "Video konnte nicht dekodiert werden."
+
+msgctxt "#32110"
+msgid "Invalid command."
+msgstr "Ungültiger Befehl."
+
+msgctxt "#32013"
+msgid "Installing tools …"
+msgstr "Werkzeuge werden installiert …"
+
+msgctxt "#32014"
+msgid "Downloading YouTube video …"
+msgstr "YouTube-Video wird geladen …"
+
+msgctxt "#32015"
+msgid "Turn visual on"
+msgstr "Visual einschalten"

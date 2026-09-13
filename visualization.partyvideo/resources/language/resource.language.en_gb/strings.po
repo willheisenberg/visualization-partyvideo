@@ -1,0 +1,107 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgctxt "#32000"
+msgid "Party Video"
+msgstr ""
+
+msgctxt "#32001"
+msgid "Enter YouTube URL"
+msgstr ""
+
+msgctxt "#32002"
+msgid "Choose video file"
+msgstr ""
+
+msgctxt "#32003"
+msgid "Turn visual off"
+msgstr ""
+
+msgctxt "#32004"
+msgid "Status"
+msgstr ""
+
+msgctxt "#32005"
+msgid "Update yt-dlp and Deno"
+msgstr ""
+
+msgctxt "#32006"
+msgid "Choose video source / open menu"
+msgstr ""
+
+msgctxt "#32007"
+msgid "Maximum YouTube resolution"
+msgstr ""
+
+msgctxt "#32009"
+msgid "YouTube requires downloading yt-dlp and Deno (about 100 MB). Install now?"
+msgstr ""
+
+msgctxt "#32010"
+msgid "The Party Video service is not ready yet. Please wait."
+msgstr ""
+
+msgctxt "#32011"
+msgid "On"
+msgstr ""
+
+msgctxt "#32012"
+msgid "Off"
+msgstr ""
+
+msgctxt "#32100"
+msgid "Invalid YouTube URL."
+msgstr ""
+
+msgctxt "#32101"
+msgid "Please choose a local file. Network sources are not supported."
+msgstr ""
+
+msgctxt "#32102"
+msgid "Video file not found."
+msgstr ""
+
+msgctxt "#32103"
+msgid "Could not install or verify tools."
+msgstr ""
+
+msgctxt "#32104"
+msgid "YouTube download failed. See Kodi log."
+msgstr ""
+
+msgctxt "#32105"
+msgid "No suitable H.264 format available."
+msgstr ""
+
+msgctxt "#32106"
+msgid "Could not open video."
+msgstr ""
+
+msgctxt "#32107"
+msgid "File contains no video stream."
+msgstr ""
+
+msgctxt "#32108"
+msgid "Video codec is unsupported."
+msgstr ""
+
+msgctxt "#32109"
+msgid "Video could not be decoded."
+msgstr ""
+
+msgctxt "#32110"
+msgid "Invalid command."
+msgstr ""
+
+msgctxt "#32013"
+msgid "Installing tools …"
+msgstr ""
+
+msgctxt "#32014"
+msgid "Downloading YouTube video …"
+msgstr ""
+
+msgctxt "#32015"
+msgid "Turn visual on"
+msgstr ""

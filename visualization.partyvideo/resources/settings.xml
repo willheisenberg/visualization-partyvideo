@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings>
+  <category label="32000">
+    <setting id="sources" type="action" label="32006" action="RunAddon(visualization.partyvideo,action=menu)" option="close" />
+    <setting id="max_height" type="labelenum" label="32007" values="720|1080" default="1080" />
+  </category>
+</settings>
