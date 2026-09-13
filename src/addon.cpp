@@ -1,80 +1,177 @@
 #include "addon.h"
 
-#include <atomic>
+#include "core/PlaybackEngine.h"
+#include "gl/YuvRenderer.h"
 
-#include <GLES3/gl3.h>
-
-extern "C"
-{
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#include <libswscale/swscale.h>
-}
+#include <deque>
+#include <mutex>
+#include <utility>
 
 namespace
 {
 
-// Prozessweite Zähler für Risiko R6: entlädt Kodi die Instanz oder die .so zwischen Songs?
-// Beginnt die laufende Nummer wieder bei 1, wurde die .so neu geladen.
-static std::atomic<int> g_instancesCreated{0};
-static std::atomic<int> g_instancesAlive{0};
+constexpr const char* kPrefix = "[visualization.partyvideo] ";
+constexpr size_t kMaxQueuedMessages = 200;
 
-void LogLibVersion(const char* name, unsigned version)
+ADDON_LOG ToKodiLevel(partyvideo::LogLevel level)
 {
-  kodi::Log(ADDON_LOG_INFO, "[visualization.partyvideo] %s %u.%u.%u", name, AV_VERSION_MAJOR(version),
-            AV_VERSION_MINOR(version), AV_VERSION_MICRO(version));
+  switch (level)
+  {
+    case partyvideo::LogLevel::Debug:
+      return ADDON_LOG_DEBUG;
+    case partyvideo::LogLevel::Info:
+      return ADDON_LOG_INFO;
+    case partyvideo::LogLevel::Warning:
+      return ADDON_LOG_WARNING;
+    case partyvideo::LogLevel::Error:
+      return ADDON_LOG_ERROR;
+  }
+  return ADDON_LOG_INFO;
+}
+
+// Meldungen des Worker-Threads warten hier, bis ein Kodi-Thread sie ausgibt. Zwischen zwei Songs
+// gibt es keine gültige Addon-Schnittstelle, deshalb darf der Worker kodi::Log nicht selbst aufrufen.
+class LogQueue
+{
+public:
+  void Push(partyvideo::LogLevel level, std::string text)
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_messages.size() >= kMaxQueuedMessages)
+      m_messages.pop_front();
+    m_messages.push_back({level, std::move(text)});
+  }
+
+  // Nur aus Kodi-Aufrufen (Konstruktor, Start, Stop, Render, Destruktor) heraus aufrufen.
+  void Flush()
+  {
+    std::deque<Message> messages;
+    {
+      std::lock_guard<std::mutex> lock(m_mutex);
+      messages.swap(m_messages);
+    }
+    for (const auto& message : messages)
+      kodi::Log(ToKodiLevel(message.level), "%s%s", kPrefix, message.text.c_str());
+  }
+
+private:
+  struct Message
+  {
+    partyvideo::LogLevel level;
+    std::string text;
+  };
+
+  std::mutex m_mutex;
+  std::deque<Message> m_messages;
+};
+
+LogQueue& Logs()
+{
+  static LogQueue queue;
+  return queue;
+}
+
+std::string StateDirectory()
+{
+  std::string path = kodi::addon::GetUserPath();
+  while (path.size() > 1 && path.back() == '/')
+    path.pop_back();
+  return path;
+}
+
+// Prozessweit: überlebt die Kodi-Instanzen (Stufe-0-Befund: neue Instanz pro Song, .so bleibt geladen).
+partyvideo::PlaybackEngine& SharedEngine()
+{
+  Logs(); // vor der Engine anlegen, damit die Warteschlange erst nach ihr zerstört wird
+  static partyvideo::PlaybackEngine engine([] {
+    partyvideo::EngineConfig config;
+    config.stateDirectory = StateDirectory();
+    config.log = [](partyvideo::LogLevel level, const std::string& text) { Logs().Push(level, text); };
+    return config;
+  }());
+  return engine;
 }
 
 } // namespace
 
-CPartyVideo::CPartyVideo()
+CPartyVideo::CPartyVideo() : m_engine(SharedEngine())
 {
-  const int number = ++g_instancesCreated;
-  const int alive = ++g_instancesAlive;
-  kodi::Log(ADDON_LOG_INFO, "[visualization.partyvideo] Instanz erzeugt (#%d, aktiv %d)", number, alive);
+  Logs().Flush();
 }
 
 CPartyVideo::~CPartyVideo()
 {
-  const int alive = --g_instancesAlive;
-  kodi::Log(ADDON_LOG_INFO, "[visualization.partyvideo] Instanz zerstört (aktiv %d)", alive);
+  if (m_attached)
+    m_engine.DetachInstance();
+  Logs().Flush();
 }
 
-bool CPartyVideo::Start(int channels, int samplesPerSec, int bitsPerSample, const std::string& songName)
+bool CPartyVideo::Start(int, int, int, const std::string&)
 {
-  kodi::Log(ADDON_LOG_INFO, "[visualization.partyvideo] Start: '%s' (%d Kanäle, %d Hz, %d Bit)",
-            songName.c_str(), channels, samplesPerSec, bitsPerSample);
-  kodi::Log(ADDON_LOG_INFO, "[visualization.partyvideo] FFmpeg %s", av_version_info());
-  LogLibVersion("libavcodec", avcodec_version());
-  LogLibVersion("libavformat", avformat_version());
-  LogLibVersion("libavutil", avutil_version());
-  LogLibVersion("libswscale", swscale_version());
+  if (!m_attached && !m_rendererFailed)
+  {
+    m_engine.AttachInstance();
+    m_attached = true;
+  }
+  m_needsDraw = true;
+  Logs().Flush();
   return true;
 }
 
 void CPartyVideo::Stop()
 {
-  kodi::Log(ADDON_LOG_INFO, "[visualization.partyvideo] Stop");
+  if (m_attached)
+  {
+    m_engine.DetachInstance();
+    m_attached = false;
+  }
+  Logs().Flush();
+}
+
+bool CPartyVideo::IsDirty()
+{
+  return m_needsDraw || (!m_rendererFailed && m_engine.Mailbox().Sequence() != m_seenSequence);
 }
 
 void CPartyVideo::Render()
 {
-  if (!m_glInfoLogged)
-  {
-    const GLubyte* glVersion = glGetString(GL_VERSION);
-    kodi::Log(ADDON_LOG_INFO, "[visualization.partyvideo] GL_VERSION %s",
-              glVersion ? reinterpret_cast<const char*>(glVersion) : "(kein GL-Kontext)");
-    kodi::Log(ADDON_LOG_INFO, "[visualization.partyvideo] Viewport x=%d y=%d w=%d h=%d", X(), Y(),
-              Width(), Height());
-    m_glInfoLogged = true;
-  }
+  Logs().Flush();
 
-  // Kodi hat die Scissor-Box schon auf die Visualisierungsfläche gesetzt; X()/Y() sind keine GL-Koordinaten.
-  glEnable(GL_SCISSOR_TEST);
-  glClearColor(0.85f, 0.10f, 0.55f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT);
-  glDisable(GL_SCISSOR_TEST);
+  if (!m_renderer && !m_rendererFailed)
+  {
+    auto renderer = std::make_unique<partyvideo::YuvRenderer>();
+    if (!renderer->Init())
+    {
+      m_rendererFailed = true;
+      kodi::Log(ADDON_LOG_ERROR, "%sGL-Initialisierung fehlgeschlagen: %s", kPrefix,
+                renderer->LastError().c_str());
+      if (m_attached)
+      {
+        m_engine.DetachInstance();
+        m_attached = false;
+      }
+    }
+    m_renderer = std::move(renderer);
+  }
+  if (!m_renderer)
+    return;
+
+  const auto read = m_engine.Mailbox().ReadIfChanged(m_seenSequence);
+  if (read.changed && !m_rendererFailed)
+  {
+    if (read.frame)
+    {
+      const auto previousError = m_renderer->LastError();
+      m_renderer->Upload(*read.frame);
+      if (!m_renderer->LastError().empty() && m_renderer->LastError() != previousError)
+        kodi::Log(ADDON_LOG_ERROR, "%sVideo-Upload fehlgeschlagen: %s", kPrefix,
+                  m_renderer->LastError().c_str());
+    }
+    else
+      m_renderer->ClearFrame();
+  }
+  m_renderer->Draw();
+  m_needsDraw = false;
 }
 
 ADDONCREATOR(CPartyVideo)
