@@ -1,11 +1,7 @@
-<img src="visualization.partyvideo/resources/icon.png" alt="" width="96" align="left">
-
-# Party Video
+<h1><img src="visualization.partyvideo/resources/icon.png" alt="" width="80" height="80" align="middle"> Party Video</h1>
 
 **Ein Video statt Balken: Kodi-Addon, das zu deiner Musik ein stummes Video in
 Endlosschleife zeigt — einen YouTube-Clip oder eine Datei von der Platte.**
-
-<br clear="left">
 
 Kodi bringt für Musik nur abstrakte Visualisierungen mit. Party Video setzt
 stattdessen ein Video hinter den Klang: Lavalampe, Loop, Musikvideo, was du
