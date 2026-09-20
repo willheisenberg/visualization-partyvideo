@@ -16,10 +16,78 @@ sys.dont_write_bytecode = True
 from partyvideo.commands import Command  # noqa: E402
 from partyvideo.controller import Controller  # noqa: E402
 from partyvideo.kodi import Adapter, paths  # noqa: E402
+from partyvideo.statefile import read_json  # noqa: E402
 from partyvideo.tools import Tools  # noqa: E402
 
 ADDON_ID = "visualization.partyvideo"
 RETURN_AFTER_SECONDS = 3
+
+
+class VisualisationRecovery:
+    """Begrenzt einen fehlenden Rendererstart durch erneutes Öffnen beheben."""
+
+    def __init__(self, profile, adapter, clock=time.monotonic):
+        self.profile, self.adapter, self.clock = profile, adapter, clock
+        self.revision = None
+        self.attempts = 0
+        self.deadline = 0.0
+        self.waiting_until = None
+        self.confirmed = False
+
+    def tick(self):
+        """True während eines Fensterwechsels: automatische Navigation aussetzen."""
+        state = read_json(self.profile / "state.json")
+        revision = state.get("revision") if state.get("source") else None
+        now = self.clock()
+        if revision != self.revision:
+            self.revision = revision
+            self.attempts = 0
+            self.deadline = now + 5.0
+            self.waiting_until = None
+            self.confirmed = False
+        if revision is None:
+            return False
+
+        if self.waiting_until is not None:
+            # ActivateWindow ist asynchron. Erst nach dem Verlassen wieder öffnen.
+            allowed = self._allowed()
+            if allowed and xbmc.getCondVisibility("Window.IsActive(home)"):
+                xbmc.executebuiltin("ActivateWindow(visualisation)")
+                self.waiting_until = None
+                self.deadline = now + 5.0
+                return True
+            if allowed and xbmc.getCondVisibility("Window.IsActive(visualisation)"):
+                if now < self.waiting_until:
+                    return True
+            self.waiting_until = None
+            self.attempts = 2  # Keine Navigationsschleife bei fehlendem GUI-Wechsel.
+            return False
+
+        renderer = read_json(self.profile / "renderer.json")
+        if renderer.get("revision") == revision and renderer.get("state") in ("playing", "error"):
+            self.confirmed = True
+        if self.confirmed or self.attempts >= 2 or now < self.deadline:
+            return False
+        if not self._allowed() or not xbmc.getCondVisibility("Window.IsActive(visualisation)"):
+            return False
+        self.attempts += 1
+        self.waiting_until = now + 2.0
+        xbmc.log(
+            f"[{ADDON_ID}] Rendererstart fehlt für Revision {revision}; "
+            f"öffne Visualisierung neu (Versuch {self.attempts}/2)", xbmc.LOGWARNING,
+        )
+        xbmc.executebuiltin("ActivateWindow(home)")
+        return True
+
+    def _allowed(self):
+        return (
+            xbmc.getCondVisibility("Player.HasAudio")
+            and xbmc.getGlobalIdleTime() >= RETURN_AFTER_SECONDS
+            and not any(xbmc.getCondVisibility(condition) for condition in (
+                "System.HasModalDialog", "System.ScreenSaverActive", "System.DPMSActive",
+            ))
+            and self.adapter.selected() == ADDON_ID
+        )
 
 
 def idle_return_due():
@@ -106,6 +174,7 @@ def main():
     monitor = Monitor(commands)
     player = Player()
     controller = Controller(profile, temporary, Adapter(), Tools(profile / "tools"))
+    recovery = VisualisationRecovery(profile, controller.adapter)
     window = xbmcgui.Window(10000)
     window.clearProperty("partyvideo.service")
     try:
@@ -127,15 +196,16 @@ def main():
                     except (OSError, ValueError, RuntimeError) as exc:
                         controller.fail(str(exc))
                 controller.tick()
+                recovering = recovery.tick()
                 if player.track_started.is_set():
                     player.track_started.clear()
                     now = time.monotonic()
                     pending = [now + delay for delay in (0.25, 0.75, 1.5)]
-                if pending and time.monotonic() >= pending[0]:
+                if not recovering and pending and time.monotonic() >= pending[0]:
                     pending.pop(0)
                     show_visualisation(state_path)
                 now = time.monotonic()
-                if not pending and now >= next_idle_check:
+                if not recovering and not pending and now >= next_idle_check:
                     next_idle_check = now + 0.5
                     if idle_return_due():
                         show_visualisation(state_path)

@@ -64,6 +64,12 @@ Unter **Konfigurieren** lässt sich die maximale YouTube-Auflösung auf 720p sta
 - **Beim Titelwechsel** erscheint die Visualisierung automatisch. Drückst du
   „Zurück“, kehrt sie nach drei Sekunden ohne Bedienung von selbst zurück;
   Einstellungen und andere Dialoge bleiben ungestört bedienbar.
+- **Bleibt die Ansicht nach dem Laden schwarz**, prüft der Service nach fünf
+  Sekunden, ob der Renderer die neue Quelle übernommen hat. Fehlt dessen Status,
+  öffnet er die Visualisierungsansicht höchstens zweimal neu. Dabei kann kurz das
+  Hauptmenü sichtbar werden; die Musik läuft weiter. Bei laufender Bedienung,
+  fremden Dialogen oder aktivem Bildschirmschoner greift diese Wiederherstellung
+  nicht ein. Ein gemeldeter Decoderfehler löst keinen Fensterwechsel aus.
 - **Startest du einen Film**, hält sich das Addon vollständig heraus: Es
   dekodiert nicht und kostet keine Leistung. Nach dem Film geht es an derselben
   Stelle weiter.

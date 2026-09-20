@@ -22,6 +22,7 @@ class ServiceTests(unittest.TestCase):
             Player=object,
             LOGINFO=1,
             LOGDEBUG=0,
+            LOGWARNING=2,
             log=Mock(),
             getGlobalIdleTime=Mock(return_value=3),
             getCondVisibility=lambda name: name in self.visible,
@@ -107,3 +108,113 @@ class ServiceTests(unittest.TestCase):
         self.kodi.executebuiltin.side_effect = None  # GUI has not yet processed the command.
         self.service.show_visualisation(self.state)
         self.kodi.executebuiltin.assert_called_once_with("ActivateWindow(visualisation)")
+
+    def recovery(self):
+        self.state.write_text(json.dumps({"source": "/storage/video.mp4", "revision": 12}))
+        self.now = 0.0
+        adapter = Mock()
+        adapter.selected.return_value = self.service.ADDON_ID
+        recovery = self.service.VisualisationRecovery(self.state.parent, adapter, lambda: self.now)
+        self.assertFalse(recovery.tick())
+        self.kodi.executebuiltin.side_effect = None  # Kodi processes commands asynchronously.
+        return recovery
+
+    def renderer(self, revision=12, state="playing"):
+        (self.state.parent / "renderer.json").write_text(json.dumps({"revision": revision, "state": state}))
+
+    def test_missing_renderer_reopens_only_after_window_has_closed(self):
+        recovery = self.recovery()
+        self.now = 4.9
+        self.assertFalse(recovery.tick())
+        self.now = 5.0
+        self.assertTrue(recovery.tick())
+        self.kodi.executebuiltin.assert_called_once_with("ActivateWindow(home)")
+        self.now = 5.1
+        self.assertTrue(recovery.tick())
+        self.assertEqual(self.kodi.executebuiltin.call_count, 1)
+        self.visible.discard("Window.IsActive(visualisation)")
+        self.visible.add("Window.IsActive(home)")
+        self.assertTrue(recovery.tick())
+        self.assertEqual(self.kodi.executebuiltin.call_args.args, ("ActivateWindow(visualisation)",))
+        self.renderer()
+        self.now = 20
+        self.assertFalse(recovery.tick())
+        self.assertEqual(self.kodi.executebuiltin.call_count, 2)
+
+    def test_ready_or_failed_renderer_never_reopens(self):
+        for state in ("playing", "error"):
+            with self.subTest(state=state):
+                recovery = self.recovery()
+                self.renderer(state=state)
+                self.now = 6
+                self.assertFalse(recovery.tick())
+                self.kodi.executebuiltin.assert_not_called()
+
+    def test_old_renderer_revision_does_not_confirm_new_source(self):
+        recovery = self.recovery()
+        self.renderer(revision=11)
+        self.now = 6
+        self.assertTrue(recovery.tick())
+
+    def test_recovery_preserves_dialogs_screensaver_settings_and_recent_input(self):
+        recovery = self.recovery()
+        self.now = 6
+        for condition in ("System.HasModalDialog", "System.ScreenSaverActive", "System.DPMSActive"):
+            self.visible.add(condition)
+            self.assertFalse(recovery.tick())
+            self.visible.remove(condition)
+        self.visible.discard("Player.HasAudio")
+        self.assertFalse(recovery.tick())
+        self.visible.add("Player.HasAudio")
+        self.kodi.getGlobalIdleTime.return_value = 1
+        self.assertFalse(recovery.tick())
+        self.kodi.getGlobalIdleTime.return_value = 3
+        recovery.adapter.selected.return_value = "other"
+        self.assertFalse(recovery.tick())
+        recovery.adapter.selected.return_value = self.service.ADDON_ID
+        self.visible.discard("Window.IsActive(visualisation)")
+        self.visible.add("Window.IsActive(settings)")
+        self.assertFalse(recovery.tick())
+        self.kodi.executebuiltin.assert_not_called()
+
+    def test_stop_or_new_source_cancels_pending_reopen(self):
+        for new_state in ({"revision": 13, "source": ""}, {"revision": 13, "source": "/other.mp4"}):
+            recovery = self.recovery()
+            self.now = 6
+            self.assertTrue(recovery.tick())
+            self.kodi.executebuiltin.reset_mock()
+            self.state.write_text(json.dumps(new_state))
+            self.assertFalse(recovery.tick())
+            self.kodi.executebuiltin.assert_not_called()
+
+    def test_window_change_timeout_does_not_repeat_navigation(self):
+        recovery = self.recovery()
+        self.now = 6
+        self.assertTrue(recovery.tick())
+        self.now = 9
+        self.assertFalse(recovery.tick())
+        self.now = 30
+        self.assertFalse(recovery.tick())
+        self.kodi.executebuiltin.assert_called_once_with("ActivateWindow(home)")
+
+    def test_manual_navigation_during_recovery_is_not_overridden(self):
+        recovery = self.recovery()
+        self.now = 6
+        self.assertTrue(recovery.tick())
+        self.visible.discard("Window.IsActive(visualisation)")
+        self.visible.add("Window.IsActive(settings)")
+        self.assertFalse(recovery.tick())
+        self.kodi.executebuiltin.assert_called_once_with("ActivateWindow(home)")
+
+    def test_recovery_is_limited_to_two_attempts(self):
+        recovery = self.recovery()
+        for now in (6, 12):
+            self.now = now
+            self.visible = {"Player.HasAudio", "Window.IsActive(visualisation)"}
+            self.assertTrue(recovery.tick())
+            self.visible = {"Player.HasAudio", "Window.IsActive(home)"}
+            self.assertTrue(recovery.tick())
+        self.now = 30
+        self.visible = {"Player.HasAudio", "Window.IsActive(visualisation)"}
+        self.assertFalse(recovery.tick())
+        self.assertEqual(self.kodi.executebuiltin.call_count, 4)
