@@ -1,5 +1,6 @@
 """Öffnet Party Video beim Musikstart und Titelwechsel automatisch."""
 
+import functools
 import json
 import queue
 import sys
@@ -16,8 +17,10 @@ sys.dont_write_bytecode = True
 from partyvideo.commands import Command  # noqa: E402
 from partyvideo.controller import Controller  # noqa: E402
 from partyvideo.kodi import Adapter, paths  # noqa: E402
+from partyvideo.pot import PLUGIN_SHA256, PLUGIN_URL, Provider  # noqa: E402
 from partyvideo.statefile import read_json  # noqa: E402
 from partyvideo.tools import Tools  # noqa: E402
+from partyvideo.youtube import download  # noqa: E402
 
 ADDON_ID = "visualization.partyvideo"
 RETURN_AFTER_SECONDS = 3
@@ -173,12 +176,20 @@ def main():
     commands = queue.Queue(maxsize=64)
     monitor = Monitor(commands)
     player = Player()
-    controller = Controller(profile, temporary, Adapter(), Tools(profile / "tools"))
+    provider = Provider()
+    controller = Controller(
+        profile,
+        temporary,
+        Adapter(),
+        Tools(profile / "tools", plugin=(PLUGIN_URL, PLUGIN_SHA256)),
+        downloader=functools.partial(download, provider=provider),
+    )
     recovery = VisualisationRecovery(profile, controller.adapter)
     window = xbmcgui.Window(10000)
     window.clearProperty("partyvideo.service")
     try:
         controller.start()
+        provider.stop(force=True)  # Rest eines abgebrochenen Laufs, etwa nach einem Kodi-Absturz.
         window.setProperty("partyvideo.service", "ready")
         xbmc.log(f"[{ADDON_ID}] service: ready (YouTube und Befehlskanal)", xbmc.LOGINFO)
         pending = []
@@ -216,6 +227,7 @@ def main():
     finally:
         window.clearProperty("partyvideo.service")
         controller.shutdown()
+        provider.stop(force=True)
         xbmc.log(f"[{ADDON_ID}] service: beendet", xbmc.LOGINFO)
 
 

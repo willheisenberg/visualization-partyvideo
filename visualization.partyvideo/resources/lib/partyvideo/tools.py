@@ -49,14 +49,24 @@ def verify(path, sums, filename):
         raise ValueError(f"Prüfsumme stimmt nicht: {filename}")
 
 
+# Plugin für den PO-Token-Dienst; Version und Prüfsumme gehören zum Image in pot.py.
+PLUGIN_NAME = "pot-plugin.zip"
+INSTALLED = ("yt-dlp", "deno", PLUGIN_NAME, "versions.json")
+
+
 class Tools:
-    def __init__(self, directory, downloader=fetch, runner=subprocess.run):
+    def __init__(self, directory, downloader=fetch, runner=subprocess.run, plugin=None):
         self.directory = Path(directory)
         self.fetch = downloader
         self.run = runner
+        # (URL, SHA-256) des Plugins; ohne Angabe wird keines installiert.
+        self.plugin = plugin
 
     def ready(self):
-        return all((self.directory / name).is_file() for name in ("yt-dlp", "deno", "versions.json"))
+        return all((self.directory / name).is_file() for name in self._installed())
+
+    def _installed(self):
+        return tuple(name for name in INSTALLED if self.plugin or name != PLUGIN_NAME)
 
     def _release(self, repository, stage, cancel):
         metadata = stage / (repository.split("/")[1] + "-release.json")
@@ -91,10 +101,15 @@ class Tools:
             result = self.run([str(stage / "deno"), "--version"], capture_output=True, text=True, timeout=20)
             if result.returncode != 0 or not result.stdout.startswith("deno "):
                 raise ValueError("Deno kann auf diesem Gerät nicht starten")
+            if self.plugin:
+                url, digest = self.plugin
+                self.fetch(url, stage / PLUGIN_NAME, cancel)
+                if hashlib.sha256((stage / PLUGIN_NAME).read_bytes()).hexdigest() != digest:
+                    raise ValueError(f"Prüfsumme stimmt nicht: {PLUGIN_NAME}")
             check_cancel(cancel)
             (stage / "versions.json").write_text(json.dumps({"yt-dlp": tag, "deno": deno_tag}))
             for path in stage.iterdir():
-                if path.name not in ("yt-dlp", "deno", "versions.json"):
+                if path.name not in self._installed():
                     path.unlink()
             # Während des Austauschs läuft kein Downloader. Altes Paar bleibt bei Fehler erhalten.
             if backup.exists():

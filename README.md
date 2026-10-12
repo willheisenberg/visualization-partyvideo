@@ -55,6 +55,11 @@ Unter **Konfigurieren** lässt sich die maximale YouTube-Auflösung auf 720p sta
 - **Der erste YouTube-Download** installiert nach Rückfrage zwei Hilfsprogramme
   (yt-dlp und Deno, zusammen rund 100 MB), beide über Prüfsummen abgesichert.
   Das passiert nur einmal.
+- **Scheitert ein YouTube-Download**, etwa mit „403 Forbidden", versucht das Addon
+  es erneut mit einem PO-Token, notfalls zweimal. Dafür startet es kurz einen
+  Docker-Container (`brainicism/bgutil-ytdlp-pot-provider`, beim ersten Mal rund
+  100 MB) und entfernt ihn danach wieder. Das setzt das LibreELEC-Addon „Docker"
+  voraus; ohne Docker bleibt es beim einfachen zweiten Versuch.
 - **Videos werden vollständig geladen**, nicht gestreamt. Ein langes Video kann
   daher mehrere Gigabyte belegen. Während ein neues lädt, läuft das bisherige
   weiter.

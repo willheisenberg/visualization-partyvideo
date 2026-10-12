@@ -57,6 +57,32 @@ class ToolsTests(unittest.TestCase):
     def install(self):
         self.tools.install(threading.Event(), lambda value: None)
 
+    def test_plugin_is_installed_only_with_its_pinned_checksum(self):
+        plugin = archive("yt_dlp_plugins/extractor/x.py", "")
+        fetch = self.fetch
+
+        def with_plugin(url, path, cancel):
+            if url == "https://example.invalid/plugin.zip":
+                Path(path).write_bytes(plugin)
+            else:
+                fetch(url, path, cancel)
+
+        good = ("https://example.invalid/plugin.zip", hashlib.sha256(plugin).hexdigest())
+        self.tools = Tools(self.root / "tools", with_plugin, self.run_deno, plugin=good)
+        self.install()
+        self.assertTrue(self.tools.ready())
+        self.assertEqual((self.tools.directory / "pot-plugin.zip").read_bytes(), plugin)
+
+        bad = Tools(self.root / "tools", with_plugin, self.run_deno, plugin=(good[0], "0" * 64))
+        with self.assertRaises(ValueError):
+            bad.install(threading.Event(), lambda value: None)
+        self.assertTrue(self.tools.ready(), "altes Werkzeugpaar ging verloren")
+
+    def test_existing_install_without_the_plugin_is_not_ready(self):
+        self.install()
+        with_plugin = Tools(self.root / "tools", self.fetch, self.run_deno, plugin=("u", "0" * 64))
+        self.assertFalse(with_plugin.ready())
+
     def test_verified_pair_is_installed_from_pinned_release(self):
         self.install()
         self.assertTrue(self.tools.ready())
