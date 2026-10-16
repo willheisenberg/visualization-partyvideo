@@ -150,6 +150,13 @@ class ServiceTests(unittest.TestCase):
                 self.assertFalse(recovery.tick())
                 self.kodi.executebuiltin.assert_not_called()
 
+    def test_recovery_pauses_while_another_addon_suppresses_takeover(self):
+        recovery = self.recovery()
+        self.now = 6
+        self.visible.add(self.service.SUPPRESSED)
+        self.assertFalse(recovery.tick())
+        self.kodi.executebuiltin.assert_not_called()
+
     def test_old_renderer_revision_does_not_confirm_new_source(self):
         recovery = self.recovery()
         self.renderer(revision=11)
@@ -218,3 +225,11 @@ class ServiceTests(unittest.TestCase):
         self.visible = {"Player.HasAudio", "Window.IsActive(visualisation)"}
         self.assertFalse(recovery.tick())
         self.assertEqual(self.kodi.executebuiltin.call_count, 4)
+
+    def test_other_addons_can_suppress_takeover_during_calls(self):
+        """script.telegram.calls spielt den Anrufton über Kodis Player; dann nicht umschalten."""
+        self.visible.discard("Window.IsActive(visualisation)")
+        self.visible.add(self.service.SUPPRESSED)
+        for _ in range(3):
+            self.service.show_visualisation(self.state)
+        self.kodi.executebuiltin.assert_not_called()

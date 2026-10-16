@@ -24,6 +24,9 @@ from partyvideo.youtube import download  # noqa: E402
 
 ADDON_ID = "visualization.partyvideo"
 RETURN_AFTER_SECONDS = 3
+# Andere Addons setzen diese Home-Fenster-Eigenschaft, solange ihr Ton keine Musik ist
+# (z. B. script.telegram.calls während eines Anrufs); dann nicht auf die Visualisierung schalten.
+SUPPRESSED = "!String.IsEmpty(Window(Home).Property(partyvideo.suppress))"
 
 
 class VisualisationRecovery:
@@ -87,7 +90,7 @@ class VisualisationRecovery:
             xbmc.getCondVisibility("Player.HasAudio")
             and xbmc.getGlobalIdleTime() >= RETURN_AFTER_SECONDS
             and not any(xbmc.getCondVisibility(condition) for condition in (
-                "System.HasModalDialog", "System.ScreenSaverActive", "System.DPMSActive",
+                "System.HasModalDialog", "System.ScreenSaverActive", "System.DPMSActive", SUPPRESSED,
             ))
             and self.adapter.selected() == ADDON_ID
         )
@@ -103,7 +106,7 @@ def idle_return_due():
 
 def show_visualisation(state_path):
     """Nur für aktive Party-Video-Musikwiedergabe die Titelansicht ausblenden."""
-    if not xbmc.getCondVisibility("Player.HasAudio"):
+    if not xbmc.getCondVisibility("Player.HasAudio") or xbmc.getCondVisibility(SUPPRESSED):
         return
     try:
         state = json.loads(state_path.read_text(encoding="utf-8"))

@@ -52,6 +52,20 @@ Renderer-Fehler werden nur bei zur aktuellen Quelle passender Revision übernomm
 `partyvideo.service=ready` bestätigt den laufenden Service. Die übrigen Statusfelder
 sind analog als `Window(Home).Property(partyvideo.<feld>)` abfragbar.
 
+## Automatisches Umschalten unterdrücken
+
+Der Service schaltet bei jedem Wiedergabestart mit Ton auf die Visualisierung. Spielt
+ein anderes Addon Ton ab, der keine Musik ist, setzt es solange die Eigenschaft
+`partyvideo.suppress` am Home-Fenster (beliebiger nicht leerer Wert) und löscht sie
+danach wieder:
+
+```python
+xbmcgui.Window(10000).setProperty("partyvideo.suppress", "script.telegram.calls")
+xbmcgui.Window(10000).clearProperty("partyvideo.suppress")
+```
+
+Genutzt von `script.telegram.calls` während Klingeln und Gespräch.
+
 ## Downloadtechnik
 
 H.264 bis 1080p/720p, bevorzugt höchstens 30 fps, danach die Format-Fallbacks aus
