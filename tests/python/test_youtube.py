@@ -51,41 +51,42 @@ class YoutubeTests(unittest.TestCase):
         self.assertNotIn("+", format_chain(1080))
 
     def test_download_options_use_deno_no_playlist_or_ffmpeg_merge(self):
+        from unittest.mock import patch
+
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "zbo6jUGrwdk.mp4"
             target.touch()
-            captured = {}
+            seen = {}
 
-            class Fake:
-                def __init__(self, options):
-                    captured.update(options)
+            def popen(command, **kwargs):
+                seen["command"] = command
+                return FakeTokenProcess([f"PARTYVIDEO-RESULT\t{target}\tTest"])
 
-                def __enter__(self):
-                    return self
-
-                def __exit__(self, *args):
-                    pass
-
-                def extract_info(self, url, download):
-                    return {"id": "zbo6jUGrwdk", "title": "Test"}
-
-                def prepare_filename(self, info):
-                    return str(target)
-
-            result = download(
-                "https://youtu.be/zbo6jUGrwdk",
-                directory,
-                "/tools",
-                1080,
-                threading.Event(),
-                lambda value: None,
-                lambda value: None,
-                factory=Fake,
-            )
+            with patch("subprocess.Popen", popen), patch("shutil.which", return_value="/usr/bin/python3"):
+                result = download(
+                    "https://youtu.be/zbo6jUGrwdk", directory, "/tools", 1080,
+                    threading.Event(), lambda value: None, lambda value: None,
+                )  # fmt: skip
+            command = seen["command"]
             self.assertEqual(result, (str(target), "Test"))
-            self.assertTrue(captured["noplaylist"])
-            self.assertEqual(captured["fixup"], "never")
-            self.assertEqual(captured["js_runtimes"], {"deno": {"path": "/tools/deno"}})
+            self.assertIn("--no-playlist", command)
+            self.assertEqual(command[command.index("--fixup") + 1], "never")
+            self.assertEqual(command[command.index("--js-runtimes") + 1], "deno:/tools/deno")
+
+
+def fake_fetch(behaviours, target, attempts):
+    """Ersetzt den Download im eigenen Prozess: Ausnahmen werden zu dessen DownloadError-Gründen."""
+    from partyvideo.youtube import DownloadError
+
+    def fetch(url, directory, tools, height, cancel, progress, log):
+        attempts.append(url)
+        outcome = behaviours[len(attempts) - 1]
+        if isinstance(outcome, Exception):
+            missing = "Requested format is not available" in str(outcome)
+            raise DownloadError("no_suitable_format" if missing else "download_failed") from outcome
+        return str(target), str(outcome.get("title") or outcome.get("id"))
+
+    return fetch
 
 
 class RetryTests(unittest.TestCase):
@@ -105,29 +106,6 @@ class RetryTests(unittest.TestCase):
 
     def run_download(self, behaviours, directory, target, cancel=None, provider=None):
         attempts = []
-        self.options = []
-        seen = self.options
-
-        class Fake:
-            def __init__(self, options):
-                seen.append(options)
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                pass
-
-            def extract_info(self, url, download):
-                attempts.append(url)
-                outcome = behaviours[len(attempts) - 1]
-                if isinstance(outcome, Exception):
-                    raise outcome
-                return outcome
-
-            def prepare_filename(self, info):
-                return str(target)
-
         result = download(
             "https://youtu.be/zbo6jUGrwdk",
             directory,
@@ -136,7 +114,7 @@ class RetryTests(unittest.TestCase):
             cancel or threading.Event(),
             lambda value: None,
             lambda value: None,
-            factory=Fake,
+            fetch=fake_fetch(behaviours, target, attempts),
             provider=provider,
         )
         return result, attempts
@@ -205,28 +183,6 @@ class TokenRetryTests(unittest.TestCase):
 
     def run_download(self, behaviours, directory, provider, runner):
         attempts = []
-
-        class Fake:
-            def __init__(self, options):
-                # Das Token-Plugin hat in Kodis Python nichts verloren.
-                assert "extractor_args" not in options
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                pass
-
-            def extract_info(self, url, download):
-                attempts.append(url)
-                outcome = behaviours[len(attempts) - 1]
-                if isinstance(outcome, Exception):
-                    raise outcome
-                return outcome
-
-            def prepare_filename(self, info):
-                return str(Path(directory) / "zbo6jUGrwdk.mp4")
-
         result = download(
             "https://youtu.be/zbo6jUGrwdk",
             directory,
@@ -235,7 +191,7 @@ class TokenRetryTests(unittest.TestCase):
             threading.Event(),
             lambda value: None,
             lambda value: None,
-            factory=Fake,
+            fetch=fake_fetch(behaviours, Path(directory) / "zbo6jUGrwdk.mp4", attempts),
             provider=provider,
             runner=runner,
         )
@@ -395,3 +351,33 @@ class TokenProcessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, self.assertRaises(Cancelled):
             self.run_token([], directory, cancel=cancel)
         self.assertTrue(self.process.killed)
+
+
+class OwnProcessTests(unittest.TestCase):
+    """yt-dlp nie in Kodis Python: '\\N{…}' in YoutubeDL.py ließ Kodi nach Service-Neustart abstürzen."""
+
+    def test_download_runs_yt_dlp_in_its_own_process_without_token_plugin(self):
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "zbo6jUGrwdk.mp4"
+            target.touch()
+            seen = {}
+
+            def popen(command, **kwargs):
+                seen["command"], seen["env"] = command, kwargs["env"]
+                return FakeTokenProcess([f"PARTYVIDEO-RESULT\t{target}\tTitel"])
+
+            before = set(sys.modules)
+            with patch("subprocess.Popen", popen), patch("shutil.which", return_value="/usr/bin/python3"):
+                result = download(
+                    "https://youtu.be/zbo6jUGrwdk", directory, "/tools", 1080,
+                    threading.Event(), lambda value: None, lambda value: None,
+                )  # fmt: skip
+            self.assertEqual(result, (str(target), "Titel"))
+            self.assertFalse({m for m in set(sys.modules) - before if m.startswith("yt_dlp")})
+            self.assertEqual(seen["command"][:2], ["/usr/bin/python3", "/tools/yt-dlp"])
+            self.assertNotIn("--extractor-args", seen["command"])
+            self.assertNotIn("PYTHONPATH", seen["env"])
+            self.assertIn("--no-playlist", seen["command"])
+            self.assertIn("never", seen["command"][seen["command"].index("--fixup") + 1])

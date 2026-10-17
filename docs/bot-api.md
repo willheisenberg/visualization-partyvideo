@@ -73,14 +73,19 @@ H.264 bis 1080p/720p, bevorzugt höchstens 30 fps, danach die Format-Fallbacks a
 kein zusätzliches ffmpeg-Programm. Eine eventuell enthaltene Tonspur ignoriert der
 Renderer. Playlisten und Live-Streams werden nicht heruntergeladen.
 
-yt-dlp-Zipimport enthält EJS; Deno ist die JavaScript-Runtime. Beide kommen von den
+yt-dlp läuft bei jedem Anlauf als eigener Prozess über das System-Python
+(`python3 <tools>/yt-dlp`), nie in Kodis eingebettetem Python: `yt_dlp/YoutubeDL.py`
+enthält ein `\N{…}`-Escape, für das Python 3.11 prozessweit einen Zeiger in das
+`unicodedata`-Modul des ersten Interpreters behält. Nach einem Neustart dieses Service
+war er ungültig, und der nächste Download brachte Kodi zum Absturz (SIGSEGV).
+
+Das yt-dlp-Zip enthält EJS; Deno ist die JavaScript-Runtime. Beide kommen von den
 offiziellen GitHub-Releases, mit SHA-256-Prüfung aus demselben fest aufgelösten
 Release. Ein fehlgeschlagenes Update behält das vorherige Werkzeugpaar.
 
 Schlägt der erste Anlauf fehl, holt der zweite einen PO-Token: Das Addon startet den
 Container `partyvideo-pot` (bgutil-ytdlp-pot-provider, nur an `127.0.0.1:4416`), lädt
-mit dem Client `mweb` und entfernt den Container wieder. Dieser Anlauf läuft als
-eigener Prozess über das System-Python (`python3 <tools>/yt-dlp`) und wird bei einem
+mit dem Client `mweb` und entfernt den Container wieder. Dieser Anlauf wird bei einem
 Fehlschlag einmal wiederholt. Das zugehörige yt-dlp-Plugin liegt mit fester Version
 und SHA-256 neben den Werkzeugen und wird nur diesem Prozess mitgegeben: In Kodis
 eingebettetem Python hat es Kodi zum Absturz gebracht. Eine Installation ohne das
